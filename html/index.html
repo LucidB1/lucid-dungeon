@@ -1,0 +1,354 @@
+<html>
+
+<head>
+    <script src="nui://game/ui/jquery.js" type="text/javascript"></script>
+    <link href="https://unpkg.com/tailwindcss@^2/dist/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="./style/main.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta2/css/all.min.css"
+        integrity="sha512-YWzhKL2whUzgiheMoBFwW8CKV4qpHQAEuvilg9FAn5VJUDwKZZxkJNuGM4XkWuk94WCrrwslk8yWNGmY1EduTA=="
+        crossorigin="anonymous" referrerpolicy="no-referrer" />
+</head>
+
+<body>
+    <div class="healthbar">
+        <div class="health-background">
+            <div class="health-progress"></div>
+        </div>
+    </div>
+    <div id="app" v-if="show">
+        <div class="lobbies-container rounded absolute top-96 left-12">
+            <div class="border-b text-white text-3xl  border-custom-black-color items-center justify-between p-1 flex">
+                <p>{{inLobby ? playerLobby.label : localization['LOBBIES']  }}</p>
+
+
+                <p @click="SetCreateLobbyIsActive(true)" v-if="!inLobby"
+                    class="cursor-pointer text-sm flex items-center hover:opacity-80 rounded px-2 text-white bg-blue-800">
+                    <i class="fas fa-plus mr-1"></i>
+                    {{localization['CREATE_LOBBY']}}
+                </p>
+
+                <div v-if="inLobby" class="flex">
+                    <p class="mr-2  text-sm  rounded px-2 text-white bg-blue-800">
+                        {{playerLobby.players.length}}/{{playerLobby.maxPlayers}}</p>
+
+
+                    <p @click="DeleteLobby" v-if="inLobby && IsPlayerLobbyLeader"
+                        class="cursor-pointer text-sm flex items-center hover:opacity-80 mr-2  rounded px-2 text-white bg-blue-800">
+                        <i class="fas fa-trash-alt mr-1"></i>
+                        {{localization['DELETE']}}
+                    </p>
+                    <p @click="OpenLobbySettings" v-if="inLobby && IsPlayerLobbyLeader"
+                        class="cursor-pointer text-sm flex items-center hover:opacity-80  rounded px-2 text-white bg-blue-800">
+                        <i class="fas fa-cog mr-1"></i>
+                        {{localization['LOBBY_SETTINGS']}}
+                    </p>
+
+                </div>
+
+
+            </div>
+            <div class="lobbies p-1 w-full mb-4">
+                <template v-if="!inLobby">
+                    <template v-if="lobbies && lobbies.length > 0">
+                        <div class="lobby  py-2 border-custom-black-color  text-white flex justify-between items-center"
+                            v-for="lobby in lobbies">
+                            <p class="text-lg font-light">{{lobby.label}}</p>
+                            <div class="flex items-center">
+                                <i class="fas fa-unlock" v-if="lobby.lockedLobby"></i>
+                                <p class="ml-4 text-sm  rounded px-2 text-white bg-blue-800">
+                                    {{lobby.players.length}}/{{lobby.maxPlayers}}</p>
+                                <p class="cursor-pointer ml-4 text-sm  rounded px-2 text-white hover:opacity-80 bg-blue-800"
+                                    @click="JoinLobby(lobby, lobby.lockedLobby)">
+                                    {{localization['JOIN']}}
+
+                                </p>
+                            </div>
+                        </div>
+                    </template>
+                    <template v-else>
+                        <p class="text-white text-lg font-light ">
+                            {{localization['NO_LOBBY']}}
+
+                        </p>
+
+                    </template>
+                </template>
+                <div v-else>
+                    <template>
+                        <div v-for="player in playerLobby.players"
+                            class="lobby  py-2 border-custom-black-color  text-white flex justify-between items-center">
+                            <div class="text-lg font-light flex justify-between items-center w-full">
+                                <p class="flex items-center">
+                                    <i class="fas fa-star text-yellow-300 text-sm mr-2" v-if="player.isLeader"></i>
+                                    {{player.name}}
+                                </p>
+                                <div class="flex" v-if="IsPlayerLobbyLeader && player.identifier != playerIdentifier">
+                                    <p @click="KickPlayer(player.source)"
+                                        class="cursor-pointer mr-2 text-sm flex items-center hover:opacity-80  rounded px-2 text-white bg-blue-800">
+                                        {{localization['KICK']}}
+
+                                    </p>
+                                    <p @click="PassLeadership(player.source)"
+                                        class="cursor-pointer mr-2 text-sm flex items-center hover:opacity-80  rounded px-2 text-white bg-blue-800">
+                                        {{localization['PASS_LEADERSHIP']}}
+                                    </p>
+                                </div>
+
+                            </div>
+
+                        </div>
+                    </template>
+                </div>
+            </div>
+            <div class="flex ">
+                <p @click="CloseUI"
+                    class="cursor-pointer mr-2 w-2/12 text-sm flex items-center justify-center hover:opacity-80  rounded px-2 text-white bg-blue-800">
+                    {{localization['CLOSE']}}
+
+                </p>
+                <p @click="LeaveFromLobby" v-if="inLobby "
+                    class="cursor-pointer mr-2  w-2/12 text-sm flex items-center justify-center hover:opacity-80  rounded px-2 text-white bg-blue-800">
+                    {{localization['LEAVE']}}
+
+                </p>
+                <p @click="StartDungeon" v-if="inLobby && IsPlayerLobbyLeader"
+                    class="cursor-pointer w-2/12 text-sm flex items-center justify-center hover:opacity-80  rounded px-2 text-white bg-blue-800">
+                    {{localization['START']}}
+
+                </p>
+
+            </div>
+        </div>
+
+        <div class="modal top-96" v-if="targetLobby.modalActive">
+            <div class="border-b text-white text-3xl border-custom-black-color items-center p-1 flex">
+                <p> {{targetLobby.lobbyData.label}}</p>
+                <div class="info ml-2 self-center">
+                    <div
+                        class="bg-blue-800  relative hover:opacity-80 w-4 h-4 rounded flex items-center justify-center">
+                        <i class="fas fa-info icon-size-sm inline-block"></i>
+                    </div>
+                    <div
+                        class="info-content z-20 absolute w-48 mt-1 rounded p-3 text-gray-200 text-xs font-light bg-black">
+
+
+                        {{localization['PASSWORD_INFO']}}
+
+                    </div>
+
+                </div>
+            </div>
+            <div class="input-group  flex w-full">
+                <div class="p-1 mt-3 text-white flex-1">
+                    <p class="text-xs text-gray-200 mb-2">
+
+                        {{localization['PASSWORD']}}
+
+                    </p>
+                    <input type="text" v-model="targetLobby.password"
+                        class="border-none input  rounded outline-none px-2 py-1">
+                </div>
+            </div>
+            <div class="ml-2 mt-2 flex">
+                <p @click="JoinLobbyWithPassword"
+                    class="cursor-pointer mt-6  h-8 w-28 justify-center text-sm flex items-center hover:opacity-80  rounded px-2 text-white btn-color">
+                    {{localization['CONFIRM']}}
+                </p>
+                <p @click="targetLobby.modalActive = false;targetLobby.password = '';targetLobby.lobbyData = null;"
+                    class="cursor-pointer mt-6 ml-2 h-8 w-28 justify-center text-sm flex items-center hover:opacity-80  rounded px-2 text-white btn-color">
+                    {{localization['CANCEL']}}
+                </p>
+
+            </div>
+        </div>
+        <div class="modal top-96" v-if="createLobbyActive">
+            <div class="border-b text-white text-3xl border-custom-black-color items-center p-1 flex">
+                <p> {{localization['CREATE_LOBBY']}}
+                </p>
+                <div class="info ml-2 self-center">
+                    <div
+                        class="bg-blue-800  relative hover:opacity-80 w-4 h-4 rounded flex items-center justify-center">
+                        <i class="fas fa-info icon-size-sm inline-block"></i>
+                    </div>
+                    <div
+                        class="info-content z-20 absolute w-48 mt-1 rounded p-3 text-gray-200 text-xs font-light bg-black">
+
+                        {{localization['CREATE_LOBBY_INFO']}}
+
+                    </div>
+                </div>
+            </div>
+            <div class="input-group  flex w-full">
+                <div class="p-1 mt-3 text-white flex-1">
+                    <p class="text-xs text-gray-200 mb-2"> {{localization['LOBBY_NAME']}}</p>
+                    <input type="text" v-model="newLobbyName" class="border-none input  rounded outline-none px-2 py-1">
+                </div>
+                <div class="p-1 mt-3 ml-3 text-white flex-1">
+                    <div class="flex items-center mb-2">
+                        <p class="text-xs text-gray-200">{{localization['LOBBY_PASSWORD']}} </p>
+                        <div class="info ml-2">
+                            <div
+                                class="bg-blue-800 relative hover:opacity-80 w-4 h-4 rounded flex items-center justify-center">
+                                <i class="fas fa-info icon-size-sm inline-block"></i>
+                            </div>
+                            <div
+                                class="info-content z-20  absolute w-48 mt-1 rounded p-3 text-gray-200 text-xs font-light bg-black">
+
+                                {{localization['PASSWORD_INFO']}}
+                            </div>
+                        </div>
+                    </div>
+                    <input type="password" v-model="newLobbyPassword"
+                        class="border-none input  rounded outline-none py-1 px-2">
+                </div>
+            </div>
+
+            <div class="input-group flex mt-5 w-full items-center justify-between">
+                <div class="py-1 px-2 mr-6 text-white">
+                    <div class="flex items-center mb-2">
+                        <p class="text-xs text-gray-200"> {{localization['MAX_PLAYERS']}}
+                        </p>
+                        <div class="info ml-2">
+                            <div
+                                class="bg-blue-800 relative hover:opacity-80 w-4 h-4 rounded flex items-center justify-center">
+                                <i class="fas fa-info icon-size-sm inline-block"></i>
+                            </div>
+                            <div
+                                class="info-content z-20 absolute w-48 mt-1 rounded p-3 text-gray-200 text-xs font-light bg-black">
+                                {{localization['MAX_PLAYERS_INFO']}}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex items-center justify-around input rounded">
+                        <input v-model="newLobbyMaxPlayersAmount" type="number" min="1" max="4"
+                            class="border-none input  text-center   outline-none px-1 py-1"
+                            style="background-color:rgba(0,0,0,0)">
+                        <div class="flex flex-col justify-end select-none items-center">
+                            <p class="text-sm cursor-pointer"
+                                @click="newLobbyMaxPlayersAmount= Number(newLobbyMaxPlayersAmount) + 1">+</p>
+                            <p class="text-sm cursor-pointer"
+                                @click="newLobbyMaxPlayersAmount= Number(newLobbyMaxPlayersAmount) - 1">-</p>
+
+                        </div>
+                    </div>
+
+                </div>
+                <div class="py-1 px-2 text-white flex-1">
+                    <p class="text-xs text-gray-200 mb-2">{{localization['SELECT_DUNGEON']}}</p>
+                    <div class="border-none relative input text-center  outline-none py-1"
+                        :class="{'rounded' : !selectDungeonActive, 'custom-rounded' : selectDungeonActive}">
+                        <p class="cursor-pointer" @click="selectDungeonActive = !selectDungeonActive">
+                            {{GetSelectedDungeonLabel}}</p>
+                        <div class="absolute mt-1 input w-full" v-if="selectDungeonActive">
+                            <p class="py-2 cursor-pointer hover:opacity-80" v-for="dungeon in dungeons"
+                                @click="SetNewSelectedDungeon(dungeon.dungeonLabel)">
+                                {{dungeon.dungeonLabel}} | {{dungeon.requiredItem.amount}}x
+                                {{dungeon.requiredItem.label}}
+                            </p>
+
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="ml-2 mt-2 flex">
+                <p @click="CreateLobby"
+                    class="cursor-pointer mt-6  h-8 w-28 justify-center text-sm flex items-center hover:opacity-80  rounded px-2 text-white btn-color">
+                    {{localization['CONFIRM']}}
+                </p>
+                <p @click="SetCreateLobbyIsActive(false)"
+                    class="cursor-pointer mt-6 ml-2 h-8 w-28 justify-center text-sm flex items-center hover:opacity-80  rounded px-2 text-white btn-color">
+                    {{localization['CANCEL']}}
+                </p>
+
+            </div>
+
+        </div>
+        <div class="modal top-96" v-if="lobbySettingsIsOpen && inLobby">
+            <div class="border-b text-white text-3xl border-custom-black-color items-center p-1 flex">
+                <p> {{playerLobby.label}} | {{localization['CHANGE_SETTINGS']}}
+                </p>
+
+            </div>
+            <div class="input-group  flex w-full">
+                <div class="p-1 mt-3 text-white flex-1">
+                    <p class="text-xs text-gray-200 mb-2"> {{localization['LOBBY_NAME']}}</p>
+                    <input type="text" v-model="newLobbyName" class="border-none input  rounded outline-none px-2 py-1">
+                </div>
+                <div class="p-1 mt-3 ml-3 text-white flex-1">
+                    <div class="flex items-center mb-2">
+                        <p class="text-xs text-gray-200">{{localization['LOBBY_PASSWORD']}} </p>
+                        <div class="info ml-2">
+                            <div
+                                class="bg-blue-800 relative hover:opacity-80 w-4 h-4 rounded flex items-center justify-center">
+                                <i class="fas fa-info icon-size-sm inline-block"></i>
+                            </div>
+                            <div
+                                class="info-content z-20  absolute w-48 mt-1 rounded p-3 text-gray-200 text-xs font-light bg-black">
+                                {{playerLobby.lobbyPassword}}
+                            </div>
+                        </div>
+                    </div>
+                    <input type="password" v-model="newLobbyPassword"
+                        class="border-none input  rounded outline-none py-1 px-2">
+                </div>
+            </div>
+
+            <div class="input-group flex mt-5 w-full items-center justify-between">
+                <div class="py-1 px-2 mr-6 text-white">
+                    <div class="flex items-center mb-2">
+                        <p class="text-xs text-gray-200"> {{localization['MAX_PLAYERS']}}
+                        </p>
+
+                    </div>
+                    <div class="flex items-center justify-around input rounded">
+                        <input v-model="newLobbyMaxPlayersAmount" type="number" min="1" max="4"
+                            class="border-none input  text-center   outline-none px-1 py-1"
+                            style="background-color:rgba(0,0,0,0)">
+                        <div class="flex flex-col justify-end select-none items-center">
+                            <p class="text-sm cursor-pointer"
+                                @click="newLobbyMaxPlayersAmount= Number(newLobbyMaxPlayersAmount) + 1">+</p>
+                            <p class="text-sm cursor-pointer"
+                                @click="newLobbyMaxPlayersAmount= Number(newLobbyMaxPlayersAmount) - 1">-</p>
+
+                        </div>
+                    </div>
+
+                </div>
+                <div class="py-1 px-2 text-white flex-1">
+                    <p class="text-xs text-gray-200 mb-2">{{localization['SELECT_DUNGEON']}}</p>
+                    <div class="border-none relative input text-center  outline-none py-1"
+                        :class="{'rounded' : !selectDungeonActive, 'custom-rounded' : selectDungeonActive}">
+                        <p class="cursor-pointer" @click="selectDungeonActive = !selectDungeonActive">
+                            {{GetSelectedDungeonLabel}}</p>
+                        <div class="absolute mt-1 input w-full" v-if="selectDungeonActive">
+                            <p class="py-2 cursor-pointer hover:opacity-80" v-for="dungeon in dungeons"
+                                @click="SetNewSelectedDungeon(dungeon.dungeonLabel)">
+                                {{dungeon.dungeonLabel}} | {{dungeon.requiredItem.amount}}x
+                                {{dungeon.requiredItem.label}}
+                            </p>
+
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="ml-2 mt-2 flex">
+                <p @click="ChangeLobbySettings"
+                    class="cursor-pointer mt-6  h-8 w-28 justify-center text-sm flex items-center hover:opacity-80  rounded px-2 text-white btn-color">
+                    {{localization['CHANGE']}}
+                </p>
+                <p @click="lobbySettingsIsOpen = false;"
+                    class="cursor-pointer mt-6 ml-2 h-8 w-28 justify-center text-sm flex items-center hover:opacity-80  rounded px-2 text-white btn-color">
+                    {{localization['CANCEL']}}
+                </p>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</body>
+<script src="https://cdn.jsdelivr.net/npm/vue@2/dist/vue.js"></script>
+<script src="./listener.js" type="text/javascript"></script>
+
+</html>
